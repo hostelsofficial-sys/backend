@@ -1,5 +1,15 @@
+// src/modules/reservations/reservations.service.ts
 import { prisma } from '../../config/prisma';
 import { CreateReservationInput, ReviewReservationInput } from './reservations.schema';
+
+interface RoomTypeConfigDB {
+  type: string;
+  totalRooms: number;
+  availableRooms: number;
+  personsInRoom: number;
+  price: number;
+  fullRoomPriceDiscounted?: number | null;
+}
 
 export class ReservationsService {
   async createReservation(userId: string, data: CreateReservationInput) {
@@ -27,22 +37,33 @@ export class ReservationsService {
       throw new Error('Hostel not found or inactive');
     }
 
+    // Validate that the requested room type exists in this hostel
+    const roomTypes = hostel.roomTypes as RoomTypeConfigDB[];
+    const selectedRoomType = roomTypes.find(rt => rt.type === data.roomType);
+
+    if (!selectedRoomType) {
+      throw new Error('Room type not available in this hostel');
+    }
+
+    // Check for existing pending/accepted reservation for same hostel and room type
     const existingReservation = await prisma.reservation.findFirst({
       where: {
         studentId: studentProfile.id,
         hostelId: data.hostelId,
+        roomType: data.roomType,
         status: { in: ['PENDING', 'ACCEPTED'] },
       },
     });
 
     if (existingReservation) {
-      throw new Error('You already have an active reservation for this hostel');
+      throw new Error('You already have an active reservation for this room type at this hostel');
     }
 
     const reservation = await prisma.reservation.create({
       data: {
         studentId: studentProfile.id,
         hostelId: data.hostelId,
+        roomType: data.roomType,
         message: data.message,
       },
     });

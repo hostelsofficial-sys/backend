@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { FeesController } from './fees.controller';
 import { validate } from '../../middleware/validate.middleware';
 import { authenticate, authorize, notTerminated } from '../../middleware/auth.middleware';
+import { handleMulterError, parseFormData } from '../../middleware/upload.middleware';
+import { uploadPaymentProof } from '../../config/cloudinary';
 import { submitFeeSchema, reviewFeeSchema } from './fees.schema';
 
 const router = Router();
@@ -13,6 +15,13 @@ router.post(
   authenticate,
   authorize('MANAGER'),
   notTerminated,
+  (req, res, next) => {
+    uploadPaymentProof(req, res, (err) => {
+      if (err) return handleMulterError(err, req, res, next);
+      next();
+    });
+  },
+  parseFormData,
   validate(submitFeeSchema),
   (req, res) => feesController.submit(req, res)
 );

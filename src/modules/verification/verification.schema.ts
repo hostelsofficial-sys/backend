@@ -11,14 +11,18 @@ export const submitVerificationSchema = z.object({
   ownerName: z.string().min(1),
   city: z.string().min(1),
   address: z.string().min(1),
-  buildingImages: z.array(z.string().url()).min(1).max(5),
+  // buildingImages will be handled via file upload
+  buildingImages: z.array(z.string()).optional(),
   hostelFor: z.enum(['BOYS', 'GIRLS']),
   easypaisaNumber: z.string().optional(),
   jazzcashNumber: z.string().optional(),
   customBanks: z.array(customBankSchema).optional().default([]),
-  acceptedRules: z.boolean().refine(val => val === true, {
-    message: 'Must accept rules',
-  }),
+  acceptedRules: z.preprocess(
+    (val) => val === 'true' || val === true,
+    z.boolean().refine(val => val === true, {
+      message: 'Must accept rules',
+    })
+  ),
 });
 
 export const reviewVerificationSchema = z.object({

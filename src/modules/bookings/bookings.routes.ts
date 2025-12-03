@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { BookingsController } from './bookings.controller';
 import { validate } from '../../middleware/validate.middleware';
 import { authenticate, authorize, notTerminated } from '../../middleware/auth.middleware';
+import { handleMulterError, parseFormData } from '../../middleware/upload.middleware';
+import { uploadTransactionImage } from '../../config/cloudinary';
 import {
   createBookingSchema,
   disapproveBookingSchema,
@@ -18,7 +20,8 @@ router.post(
   authenticate,
   authorize('STUDENT'),
   notTerminated,
-  validate(createBookingSchema),
+  uploadTransactionImage,
+  parseFormData,
   (req, res) => bookingsController.create(req, res)
 );
 
@@ -83,7 +86,7 @@ router.get(
 router.get(
   '/:id',
   authenticate,
-  authorize('ADMIN', 'SUBADMIN', 'MANAGER'),
+  authorize('ADMIN', 'SUBADMIN'),
   (req, res) => bookingsController.getById(req, res)
 );
 

@@ -1,7 +1,9 @@
+// src/modules/reservations/reservations.schema.ts
 import { z } from 'zod';
 
 export const createReservationSchema = z.object({
   hostelId: z.string(),
+  roomType: z.enum(['SHARED', 'PRIVATE', 'SHARED_FULLROOM']), // NEW
   message: z.string().optional(),
 });
 

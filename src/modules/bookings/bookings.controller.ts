@@ -1,15 +1,37 @@
 import { Response } from 'express';
+import { ZodError } from 'zod';
 import { AuthRequest } from '../../types';
 import { BookingsService } from './bookings.service';
+import { createBookingSchema } from './bookings.schema';
 
 const bookingsService = new BookingsService();
 
 export class BookingsController {
   async create(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const result = await bookingsService.createBooking(req.user!.userId, req.body);
+      if (!req.file) {
+        res.status(400).json({ success: false, message: 'Transaction image is required' });
+        return;
+      }
+
+      const data = {
+        ...req.body,
+        transactionImage: req.file.path,
+      };
+
+      const validatedData = createBookingSchema.parse(data);
+
+      const result = await bookingsService.createBooking(req.user!.userId, validatedData);
       res.status(201).json({ success: true, data: result });
     } catch (error: any) {
+      if (error instanceof ZodError) {
+        res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: error.flatten().fieldErrors,
+        });
+        return;
+      }
       res.status(400).json({ success: false, message: error.message });
     }
   }

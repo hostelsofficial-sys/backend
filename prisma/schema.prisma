@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -18,12 +20,6 @@ enum VerificationStatus {
   PENDING
   APPROVED
   REJECTED
-}
-
-enum HostelType {
-  SHARED
-  PRIVATE
-  SHARED_FULLROOM
 }
 
 enum HostelFor {
@@ -173,32 +169,38 @@ type HostelFacilities {
   customFacilities       String[]
 }
 
+// NEW: Room type configuration as embedded type
+type RoomTypeConfig {
+  type                    String   // "SHARED" | "PRIVATE" | "SHARED_FULLROOM"
+  totalRooms              Int
+  availableRooms          Int
+  personsInRoom           Int
+  price                   Float    // For PRIVATE: room price, For SHARED types: per head price
+  fullRoomPriceDiscounted Float?   // Only for SHARED_FULLROOM (optional group discount)
+}
+
 model Hostel {
-  id                      String           @id @default(auto()) @map("_id") @db.ObjectId
-  managerId               String           @db.ObjectId
-  manager                 ManagerProfile   @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  id                      String             @id @default(auto()) @map("_id") @db.ObjectId
+  managerId               String             @db.ObjectId
+  manager                 ManagerProfile     @relation(fields: [managerId], references: [id], onDelete: Cascade)
   hostelName              String
   city                    String
   address                 String
   nearbyLocations         String[]
-  totalRooms              Int
-  availableRooms          Int
-  hostelType              HostelType
   hostelFor               HostelFor
-  personsInRoom           Int
-  roomPrice               Float?
-  pricePerHeadShared      Float?
-  pricePerHeadFullRoom    Float?
-  fullRoomPriceDiscounted Float?
+  
+  // NEW: Array of room type configurations (replaces single hostelType)
+  roomTypes               RoomTypeConfig[]
+  
   facilities              HostelFacilities
   roomImages              String[]
   rules                   String?
   seoKeywords             String[]
-  averageRating           Float            @default(0)
-  reviewCount             Int              @default(0)
-  isActive                Boolean          @default(true)
-  createdAt               DateTime         @default(now())
-  updatedAt               DateTime         @updatedAt
+  averageRating           Float              @default(0)
+  reviewCount             Int                @default(0)
+  isActive                Boolean            @default(true)
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
 
   reservations Reservation[]
   bookings     Booking[]
@@ -214,6 +216,7 @@ model Reservation {
   student      StudentProfile    @relation(fields: [studentId], references: [id], onDelete: Cascade)
   hostelId     String            @db.ObjectId
   hostel       Hostel            @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  roomType     String            // NEW: Which room type they're interested in
   status       ReservationStatus @default(PENDING)
   message      String?
   rejectReason String?
@@ -229,6 +232,7 @@ model Booking {
   student          StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
   hostelId         String        @db.ObjectId
   hostel           Hostel        @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  roomType         String        // NEW: Which room type was booked
   amount           Float
   status           BookingStatus @default(PENDING)
   transactionImage String

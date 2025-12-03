@@ -3,7 +3,8 @@ import { z } from 'zod';
 export const submitFeeSchema = z.object({
   hostelId: z.string(),
   month: z.string().regex(/^\d{4}-\d{2}$/, 'Format: YYYY-MM'),
-  paymentProofImage: z.string().url(),
+  // paymentProofImage will be handled via file upload
+  paymentProofImage: z.string().optional(),
 });
 
 export const reviewFeeSchema = z.object({

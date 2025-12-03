@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { VerificationController } from './verification.controller';
 import { validate } from '../../middleware/validate.middleware';
 import { authenticate, authorize, notTerminated } from '../../middleware/auth.middleware';
+import { handleMulterError, parseFormData } from '../../middleware/upload.middleware';
+import { uploadVerificationImages } from '../../config/cloudinary';
 import { submitVerificationSchema, reviewVerificationSchema } from './verification.schema';
 
 const router = Router();
@@ -13,6 +15,13 @@ router.post(
   authenticate,
   authorize('MANAGER'),
   notTerminated,
+  (req, res, next) => {
+    uploadVerificationImages(req, res, (err) => {
+      if (err) return handleMulterError(err, req, res, next);
+      next();
+    });
+  },
+  parseFormData,
   validate(submitVerificationSchema),
   (req, res) => verificationController.submit(req, res)
 );

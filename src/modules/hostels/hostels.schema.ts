@@ -1,3 +1,4 @@
+// src/modules/hostels/hostels.schema.ts
 import { z } from 'zod';
 
 const facilitiesSchema = z.object({
@@ -13,36 +14,43 @@ const facilitiesSchema = z.object({
   customFacilities: z.array(z.string()).default([]),
 });
 
+// Room type configuration schema
+const roomTypeConfigSchema = z.object({
+  type: z.enum(['SHARED', 'PRIVATE', 'SHARED_FULLROOM']),
+  totalRooms: z.coerce.number().int().positive(),
+  personsInRoom: z.coerce.number().int().positive(),
+  price: z.coerce.number().positive(),
+  fullRoomPriceDiscounted: z.coerce.number().nullable().optional(),
+}).refine(data => {
+  // fullRoomPriceDiscounted only valid for SHARED_FULLROOM
+  if (data.type !== 'SHARED_FULLROOM' && data.fullRoomPriceDiscounted) {
+    return false;
+  }
+  return true;
+}, {
+  message: 'Discounted full room price only applies to SHARED_FULLROOM type',
+});
+
 export const createHostelSchema = z.object({
   hostelName: z.string().min(1),
   city: z.string().min(1),
   address: z.string().min(1),
   nearbyLocations: z.array(z.string()).default([]),
-  totalRooms: z.number().int().positive(),
-  hostelType: z.enum(['SHARED', 'PRIVATE', 'SHARED_FULLROOM']),
   hostelFor: z.enum(['BOYS', 'GIRLS']),
-  personsInRoom: z.number().int().positive(),
-  roomPrice: z.number().nullable().optional(),
-  pricePerHeadShared: z.number().nullable().optional(),
-  pricePerHeadFullRoom: z.number().nullable().optional(),
-  fullRoomPriceDiscounted: z.number().nullable().optional(),
+  
+  // Array of room types (at least one required)
+  roomTypes: z.array(roomTypeConfigSchema).min(1, 'At least one room type is required'),
+  
   facilities: facilitiesSchema,
-  roomImages: z.array(z.string().url()).min(1).max(10),
+  roomImages: z.array(z.string()).optional(),
   rules: z.string().optional(),
   seoKeywords: z.array(z.string()).default([]),
 }).refine(data => {
-  if (data.hostelType === 'PRIVATE' && !data.roomPrice) {
-    return false;
-  }
-  if (data.hostelType === 'SHARED' && !data.pricePerHeadShared) {
-    return false;
-  }
-  if (data.hostelType === 'SHARED_FULLROOM' && !data.pricePerHeadFullRoom) {
-    return false;
-  }
-  return true;
+  // Ensure no duplicate room types
+  const types = data.roomTypes.map(rt => rt.type);
+  return new Set(types).size === types.length;
 }, {
-  message: 'Price fields must match hostel type',
+  message: 'Each room type can only be added once',
 });
 
 export const updateHostelSchema = createHostelSchema.partial();
@@ -50,12 +58,13 @@ export const updateHostelSchema = createHostelSchema.partial();
 export const searchHostelsSchema = z.object({
   city: z.string().optional(),
   nearbyLocation: z.string().optional(),
-  hostelType: z.enum(['SHARED', 'PRIVATE', 'SHARED_FULLROOM']).optional(),
+  roomType: z.enum(['SHARED', 'PRIVATE', 'SHARED_FULLROOM']).optional(),
   hostelFor: z.enum(['BOYS', 'GIRLS']).optional(),
   minPrice: z.number().optional(),
   maxPrice: z.number().optional(),
 });
 
+export type RoomTypeConfig = z.infer<typeof roomTypeConfigSchema>;
 export type CreateHostelInput = z.infer<typeof createHostelSchema>;
 export type UpdateHostelInput = z.infer<typeof updateHostelSchema>;
 export type SearchHostelsInput = z.infer<typeof searchHostelsSchema>;

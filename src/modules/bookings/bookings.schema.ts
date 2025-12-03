@@ -1,15 +1,15 @@
+// src/modules/bookings/bookings.schema.ts
 import { z } from 'zod';
 
 export const createBookingSchema = z.object({
   hostelId: z.string(),
+  roomType: z.enum(['SHARED', 'PRIVATE', 'SHARED_FULLROOM']),
   transactionImage: z.string().url(),
   transactionDate: z.string(),
   transactionTime: z.string(),
   fromAccount: z.string(),
   toAccount: z.string(),
 });
-
-export const approveBookingSchema = z.object({});
 
 export const disapproveBookingSchema = z.object({
   refundImage: z.string().url(),
@@ -18,12 +18,13 @@ export const disapproveBookingSchema = z.object({
 });
 
 export const leaveHostelSchema = z.object({
-  rating: z.number().int().min(1).max(5),
+  rating: z.coerce.number().int().min(1).max(5),
   review: z.string().min(1),
+  reason: z.string().optional(),
 });
 
 export const kickStudentSchema = z.object({
-  reason: z.enum(['LEFT_HOSTEL', 'VIOLATED_RULES']),
+  kickReason: z.enum(['LEFT_HOSTEL', 'VIOLATED_RULES']),
 });
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
