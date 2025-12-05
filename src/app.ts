@@ -22,7 +22,7 @@ const app = express();
 // 1. Explicit CORS Configuration
 const corsOptions = {
     // CRUCIAL: Must match your frontend's running URL/port
-    origin: ['http://localhost:5173', 'https://hostelshub-ebon.vercel.app'], 
+    origin: ['http://localhost:5173', 'https://hostelshub-ebon.vercel.app' , '*'], 
     // Allows sending of cookies/auth headers
     credentials: true, 
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
