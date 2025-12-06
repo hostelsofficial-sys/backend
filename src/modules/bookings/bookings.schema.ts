@@ -10,6 +10,7 @@ export const createBookingSchema = z.object({
   transactionTime: z.string(),
   fromAccount: z.string(),
   toAccount: z.string(),
+  bookingType: z.enum(['REGULAR', 'URGENT']).default('REGULAR'), // NEW: Booking type
 });
 
 export const disapproveBookingSchema = z.object({

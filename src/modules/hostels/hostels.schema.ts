@@ -21,6 +21,7 @@ const roomTypeConfigSchema = z.object({
   personsInRoom: z.coerce.number().int().positive(),
   price: z.coerce.number().positive(),
   fullRoomPriceDiscounted: z.coerce.number().nullable().optional(),
+  urgentBookingPrice: z.coerce.number().nullable().optional(), // NEW: Urgent booking price
 }).refine(data => {
   // fullRoomPriceDiscounted only valid for SHARED_FULLROOM
   if (data.type !== 'SHARED_FULLROOM' && data.fullRoomPriceDiscounted) {

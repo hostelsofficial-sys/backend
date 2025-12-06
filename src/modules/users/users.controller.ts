@@ -1,13 +1,16 @@
-import { Response } from 'express';
-import { AuthRequest } from '../../types';
-import { UsersService } from './users.service';
+import { Response } from "express";
+import { AuthRequest } from "../../types";
+import { UsersService } from "./users.service";
 
 const usersService = new UsersService();
 
 export class UsersController {
   async selfVerify(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const result = await usersService.selfVerifyStudent(req.user!.userId, req.body);
+      const result = await usersService.selfVerifyStudent(
+        req.user!.userId,
+        req.body
+      );
       res.json({ success: true, data: result });
     } catch (error: any) {
       res.status(400).json({ success: false, message: error.message });
@@ -34,7 +37,10 @@ export class UsersController {
 
   async updateManagerProfile(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const result = await usersService.updateManagerProfile(req.user!.userId, req.body);
+      const result = await usersService.updateManagerProfile(
+        req.user!.userId,
+        req.body
+      );
       res.json({ success: true, data: result });
     } catch (error: any) {
       res.status(400).json({ success: false, message: error.message });
@@ -53,7 +59,19 @@ export class UsersController {
 
   async terminateUser(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const result = await usersService.terminateUser(req.params.id, req.user!.userId);
+      const result = await usersService.terminateUser(
+        req.params.id,
+        req.user!.userId
+      );
+      res.json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+
+  async deleteMyAccount(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const result = await usersService.deleteMyAccount(req.user!.userId);
       res.json({ success: true, data: result });
     } catch (error: any) {
       res.status(400).json({ success: false, message: error.message });

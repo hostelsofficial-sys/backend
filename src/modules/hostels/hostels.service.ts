@@ -9,6 +9,7 @@ interface RoomTypeConfigDB {
   personsInRoom: number;
   price: number;
   fullRoomPriceDiscounted?: number | null;
+  urgentBookingPrice?: number | null; // NEW
 }
 
 export class HostelsService {
@@ -33,6 +34,7 @@ export class HostelsService {
       personsInRoom: rt.personsInRoom,
       price: rt.price,
       fullRoomPriceDiscounted: rt.fullRoomPriceDiscounted || null,
+      urgentBookingPrice: rt.urgentBookingPrice || null, // NEW
     }));
 
     const hostel = await prisma.hostel.create({
@@ -93,6 +95,7 @@ export class HostelsService {
             personsInRoom: newRt.personsInRoom,
             price: newRt.price,
             fullRoomPriceDiscounted: newRt.fullRoomPriceDiscounted || null,
+            urgentBookingPrice: newRt.urgentBookingPrice || null, // NEW
           };
         } else {
           // New room type
@@ -103,6 +106,7 @@ export class HostelsService {
             personsInRoom: newRt.personsInRoom,
             price: newRt.price,
             fullRoomPriceDiscounted: newRt.fullRoomPriceDiscounted || null,
+            urgentBookingPrice: newRt.urgentBookingPrice || null, // NEW
           };
         }
       });
@@ -302,6 +306,8 @@ export class HostelsService {
       studentId: b.studentId,
       student: b.student,
       roomType: b.roomType,
+      bookingType: b.bookingType,
+      urgentLeaveDate: b.urgentLeaveDate,
       joinedAt: b.createdAt,
     }));
   }

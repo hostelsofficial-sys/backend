@@ -35,26 +35,39 @@ export class FeesService {
       throw new Error('Fee already submitted for this month');
     }
 
-    const activeBookings = await prisma.booking.count({
+    // Get the start and end dates for the month
+    const [year, month] = data.month.split('-').map(Number);
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
+
+    // NEW: Count ONLY REGULAR bookings that were approved during the month
+    // and don't count URGENT bookings or bookings that left
+    const regularBookings = await prisma.booking.findMany({
       where: {
         hostelId: data.hostelId,
-        status: 'APPROVED',
+        bookingType: 'REGULAR', // Only regular bookings
+        status: 'APPROVED', // Only approved bookings
+        createdAt: {
+          gte: monthStart,
+          lte: monthEnd,
+        },
+        // Don't count if they left during the same month (but already paid)
+        // We count them anyway because manager collected the fee
       },
     });
 
-    const feeAmount = activeBookings * FEE_PER_STUDENT;
+    const studentCount = regularBookings.length;
+    const feeAmount = studentCount * FEE_PER_STUDENT;
 
+    // Calculate total revenue from REGULAR bookings only (excluding URGENT)
     const totalRevenue = await prisma.booking.aggregate({
       where: {
         hostelId: data.hostelId,
+        bookingType: 'REGULAR', // Only regular bookings
         status: { in: ['APPROVED', 'LEFT', 'COMPLETED'] },
         createdAt: {
-          gte: new Date(`${data.month}-01`),
-          lt: new Date(
-            new Date(`${data.month}-01`).setMonth(
-              new Date(`${data.month}-01`).getMonth() + 1
-            )
-          ),
+          gte: monthStart,
+          lte: monthEnd,
         },
       },
       _sum: {
@@ -67,7 +80,7 @@ export class FeesService {
         managerId: managerProfile.id,
         hostelId: data.hostelId,
         month: data.month,
-        studentCount: activeBookings,
+        studentCount,
         totalRevenue: totalRevenue._sum.amount || 0,
         feeAmount,
         paymentProofImage: data.paymentProofImage,
@@ -121,7 +134,7 @@ export class FeesService {
 
   async reviewFee(feeId: string, reviewerId: string, data: ReviewFeeInput) {
     const fee = await prisma.monthlyAdminFee.findUnique({
-      where: { id: feeId },
+      where: { id: feeId },  // FIXED: Changed 'feeId' to 'id: feeId'
     });
 
     if (!fee) {
@@ -134,7 +147,7 @@ export class FeesService {
 
     const result = await prisma.$transaction(async (tx) => {
       const updatedFee = await tx.monthlyAdminFee.update({
-        where: { id: feeId },
+        where: { id: feeId },  // FIXED: Ensure this uses 'id' not 'feeId'
         data: {
           status: data.status,
           reviewedBy: reviewerId,
@@ -167,6 +180,9 @@ export class FeesService {
     }
 
     const currentMonth = new Date().toISOString().slice(0, 7);
+    const [year, month] = currentMonth.split('-').map(Number);
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
 
     const summary = await Promise.all(
       managerProfile.hostels.map(async (hostel) => {
@@ -180,10 +196,16 @@ export class FeesService {
           },
         });
 
-        const activeStudents = await prisma.booking.count({
+        // NEW: Count ONLY REGULAR bookings that were approved during the month
+        const regularStudents = await prisma.booking.count({
           where: {
             hostelId: hostel.id,
+            bookingType: 'REGULAR', // Only regular bookings
             status: 'APPROVED',
+            createdAt: {
+              gte: monthStart,
+              lte: monthEnd,
+            },
           },
         });
 
@@ -191,10 +213,12 @@ export class FeesService {
           hostelId: hostel.id,
           hostelName: hostel.hostelName,
           month: currentMonth,
-          activeStudents,
-          feeAmount: activeStudents * FEE_PER_STUDENT,
+          activeStudents: regularStudents,
+          feeAmount: regularStudents * FEE_PER_STUDENT,
           submitted: !!existingFee,
           status: existingFee?.status || null,
+          // Add note about urgent bookings
+          note: 'Urgent bookings are not included in admin fee calculation',
         };
       })
     );

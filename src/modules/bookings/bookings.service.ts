@@ -1,13 +1,13 @@
 // src/modules/bookings/bookings.service.ts
-import { ReservationStatus } from '@prisma/client';
-import { prisma } from '../../config/prisma';
-import { HostelsService } from '../hostels/hostels.service';
+import { ReservationStatus, BookingType } from "@prisma/client";
+import { prisma } from "../../config/prisma";
+import { HostelsService } from "../hostels/hostels.service";
 import {
   CreateBookingInput,
   DisapproveBookingInput,
   LeaveHostelInput,
   KickStudentInput,
-} from './bookings.schema';
+} from "./bookings.schema";
 
 const hostelsService = new HostelsService();
 
@@ -18,20 +18,35 @@ interface RoomTypeConfigDB {
   personsInRoom: number;
   price: number;
   fullRoomPriceDiscounted?: number | null;
+  urgentBookingPrice?: number | null;
 }
 
 export class BookingsService {
+  // Helper function to check if current date is between 1st-12th of month
+  private isWithinBookingPeriod(): boolean {
+    const today = new Date();
+    const dayOfMonth = today.getDate();
+    return dayOfMonth >= 1 && dayOfMonth <= 12;
+  }
+
+  // Helper function to get 1st of next month
+  private getFirstOfNextMonth(): Date {
+    const today = new Date();
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    return nextMonth;
+  }
+
   async createBooking(userId: string, data: CreateBookingInput) {
     const studentProfile = await prisma.studentProfile.findUnique({
       where: { userId },
     });
 
     if (!studentProfile) {
-      throw new Error('Student profile not found');
+      throw new Error("Student profile not found");
     }
 
     if (studentProfile.currentHostelId) {
-      throw new Error('Already booked in a hostel');
+      throw new Error("Already booked in a hostel");
     }
 
     const hostel = await prisma.hostel.findUnique({
@@ -39,27 +54,48 @@ export class BookingsService {
     });
 
     if (!hostel) {
-      throw new Error('Hostel not found');
+      throw new Error("Hostel not found");
     }
 
     if (!hostel.isActive) {
-      throw new Error('Hostel is not active');
+      throw new Error("Hostel is not active");
     }
 
     // Find the requested room type
     const roomTypes = hostel.roomTypes as RoomTypeConfigDB[];
-    const selectedRoomType = roomTypes.find(rt => rt.type === data.roomType);
+    const selectedRoomType = roomTypes.find((rt) => rt.type === data.roomType);
 
     if (!selectedRoomType) {
-      throw new Error('Room type not available in this hostel');
+      throw new Error("Room type not available in this hostel");
     }
 
     if (selectedRoomType.availableRooms <= 0) {
-      throw new Error('No rooms available for this room type');
+      throw new Error("No rooms available for this room type");
     }
 
-    // Get the price based on room type
-    const amount = selectedRoomType.price;
+    // Check booking date restrictions
+    const today = new Date();
+    const dayOfMonth = today.getDate();
+
+    // If it's after 12th, only allow URGENT booking
+    if (dayOfMonth > 12 && data.bookingType !== "URGENT") {
+      throw new Error(
+        "After 12th of the month, only urgent bookings are allowed. Please select URGENT booking type."
+      );
+    }
+
+    // If it's between 1st-12th, both REGULAR and URGENT are allowed
+    // Check for urgent booking price if booking type is URGENT
+    let amount = selectedRoomType.price;
+    let urgentLeaveDate: Date | null = null;
+
+    if (data.bookingType === "URGENT") {
+      if (!selectedRoomType.urgentBookingPrice) {
+        throw new Error("Urgent booking price is not set for this room type");
+      }
+      amount = selectedRoomType.urgentBookingPrice;
+      urgentLeaveDate = this.getFirstOfNextMonth();
+    }
 
     const booking = await prisma.$transaction(async (tx) => {
       const newBooking = await tx.booking.create({
@@ -68,6 +104,8 @@ export class BookingsService {
           hostelId: data.hostelId,
           roomType: data.roomType,
           amount,
+          bookingType: data.bookingType,
+          urgentLeaveDate,
           transactionImage: data.transactionImage,
           transactionDate: data.transactionDate,
           transactionTime: data.transactionTime,
@@ -82,15 +120,15 @@ export class BookingsService {
         });
 
         if (!reservation) {
-          throw new Error('Reservation not found');
+          throw new Error("Reservation not found");
         }
 
         if (reservation.studentId !== studentProfile.id) {
-          throw new Error('Reservation does not belong to this student');
+          throw new Error("Reservation does not belong to this student");
         }
 
-        if (reservation.status !== 'ACCEPTED') {
-          throw new Error('Reservation is not accepted');
+        if (reservation.status !== "ACCEPTED") {
+          throw new Error("Reservation is not accepted");
         }
 
         await tx.reservation.update({
@@ -111,7 +149,7 @@ export class BookingsService {
     });
 
     if (!managerProfile) {
-      throw new Error('Manager profile not found');
+      throw new Error("Manager profile not found");
     }
 
     const hostels = await prisma.hostel.findMany({
@@ -137,7 +175,7 @@ export class BookingsService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
   }
 
@@ -147,7 +185,7 @@ export class BookingsService {
     });
 
     if (!studentProfile) {
-      throw new Error('Student profile not found');
+      throw new Error("Student profile not found");
     }
 
     return prisma.booking.findMany({
@@ -161,7 +199,7 @@ export class BookingsService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
   }
 
@@ -171,7 +209,7 @@ export class BookingsService {
     });
 
     if (!managerProfile) {
-      throw new Error('Manager profile not found');
+      throw new Error("Manager profile not found");
     }
 
     const hostel = await prisma.hostel.findUnique({
@@ -179,7 +217,7 @@ export class BookingsService {
     });
 
     if (!hostel || hostel.managerId !== managerProfile.id) {
-      throw new Error('Hostel not found or not authorized');
+      throw new Error("Hostel not found or not authorized");
     }
 
     return prisma.booking.findMany({
@@ -193,7 +231,7 @@ export class BookingsService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
   }
 
@@ -203,7 +241,7 @@ export class BookingsService {
     });
 
     if (!managerProfile) {
-      throw new Error('Manager profile not found');
+      throw new Error("Manager profile not found");
     }
 
     const booking = await prisma.booking.findUnique({
@@ -212,33 +250,37 @@ export class BookingsService {
     });
 
     if (!booking) {
-      throw new Error('Booking not found');
+      throw new Error("Booking not found");
     }
 
     if (booking.hostel.managerId !== managerProfile.id) {
-      throw new Error('Not authorized');
+      throw new Error("Not authorized");
     }
 
-    if (booking.status !== 'PENDING') {
-      throw new Error('Booking is not pending');
+    if (booking.status !== "PENDING") {
+      throw new Error("Booking is not pending");
     }
 
     // Check room availability for the specific room type
     const roomTypes = booking.hostel.roomTypes as RoomTypeConfigDB[];
-    const roomType = roomTypes.find(rt => rt.type === booking.roomType);
+    const roomType = roomTypes.find((rt) => rt.type === booking.roomType);
 
     if (!roomType || roomType.availableRooms <= 0) {
-      throw new Error('No rooms available for this room type');
+      throw new Error("No rooms available for this room type");
     }
 
     const result = await prisma.$transaction(async (tx) => {
       const updatedBooking = await tx.booking.update({
         where: { id: bookingId },
-        data: { status: 'APPROVED' },
+        data: { status: "APPROVED" },
       });
 
       // Update room availability for the specific room type
-      await hostelsService.updateRoomAvailability(booking.hostelId, booking.roomType, -1);
+      await hostelsService.updateRoomAvailability(
+        booking.hostelId,
+        booking.roomType,
+        -1
+      );
 
       await tx.studentProfile.update({
         where: { id: booking.studentId },
@@ -249,9 +291,9 @@ export class BookingsService {
       await tx.reservation.updateMany({
         where: {
           studentId: booking.studentId,
-          status: 'PENDING',
+          status: "PENDING",
         },
-        data: { status: 'CANCELLED' },
+        data: { status: "CANCELLED" },
       });
 
       return updatedBooking;
@@ -260,13 +302,17 @@ export class BookingsService {
     return result;
   }
 
-  async disapproveBooking(userId: string, bookingId: string, data: DisapproveBookingInput) {
+  async disapproveBooking(
+    userId: string,
+    bookingId: string,
+    data: DisapproveBookingInput
+  ) {
     const managerProfile = await prisma.managerProfile.findUnique({
       where: { userId },
     });
 
     if (!managerProfile) {
-      throw new Error('Manager profile not found');
+      throw new Error("Manager profile not found");
     }
 
     const booking = await prisma.booking.findUnique({
@@ -275,21 +321,21 @@ export class BookingsService {
     });
 
     if (!booking) {
-      throw new Error('Booking not found');
+      throw new Error("Booking not found");
     }
 
     if (booking.hostel.managerId !== managerProfile.id) {
-      throw new Error('Not authorized');
+      throw new Error("Not authorized");
     }
 
-    if (booking.status !== 'PENDING') {
-      throw new Error('Booking is not pending');
+    if (booking.status !== "PENDING") {
+      throw new Error("Booking is not pending");
     }
 
     const result = await prisma.booking.update({
       where: { id: bookingId },
       data: {
-        status: 'DISAPPROVED',
+        status: "DISAPPROVED",
         refundImage: data.refundImage,
         refundDate: data.refundDate,
         refundTime: data.refundTime,
@@ -305,76 +351,104 @@ export class BookingsService {
     });
 
     if (!studentProfile) {
-      throw new Error('Student profile not found');
+      throw new Error("Student profile not found");
     }
 
     if (!studentProfile.currentHostelId) {
-      throw new Error('Not currently in a hostel');
+      throw new Error("Not currently in a hostel");
     }
 
     const activeBooking = await prisma.booking.findFirst({
       where: {
         studentId: studentProfile.id,
         hostelId: studentProfile.currentHostelId,
-        status: 'APPROVED',
+        status: "APPROVED",
       },
     });
 
     if (!activeBooking) {
-      throw new Error('No active booking found');
+      throw new Error("No active booking found");
     }
 
-    // 1) Transaction: update booking status + clear student's current hostel
-    const updatedBooking = await prisma.$transaction(async (tx) => {
-      const booking = await tx.booking.update({
+    // Check if review already exists for this booking
+    const existingReview = await prisma.review.findUnique({
+      where: { bookingId: activeBooking.id },
+    });
+
+    if (existingReview) {
+      throw new Error("You have already submitted a review for this booking");
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Update booking status and record leave date
+      const updatedBooking = await tx.booking.update({
         where: { id: activeBooking.id },
         data: {
-          status: 'LEFT',
-          kickReason: 'LEFT_HOSTEL',
+          status: "LEFT",
+          kickReason: "LEFT_HOSTEL",
+          leaveDate: new Date(),
         },
       });
 
+      // 2. Clear student's current hostel
       await tx.studentProfile.update({
         where: { id: studentProfile.id },
         data: { currentHostelId: null },
       });
 
-      return booking;
+      // 3. Update room availability for this room type
+      // Now applies to BOTH REGULAR and URGENT bookings
+      const hostel = await tx.hostel.findUnique({
+        where: { id: activeBooking.hostelId },
+      });
+
+      if (hostel && hostel.roomTypes) {
+        const roomTypes = hostel.roomTypes as RoomTypeConfigDB[];
+        const updatedRoomTypes = roomTypes.map((rt) => {
+          if (rt.type === activeBooking.roomType) {
+            return {
+              ...rt,
+              availableRooms: Math.min(rt.totalRooms, rt.availableRooms + 1),
+            };
+          }
+          return rt;
+        });
+
+        await tx.hostel.update({
+          where: { id: activeBooking.hostelId },
+          data: { roomTypes: updatedRoomTypes },
+        });
+      }
+
+      // 4. Create review
+      await tx.review.create({
+        data: {
+          bookingId: activeBooking.id,
+          hostelId: activeBooking.hostelId,
+          rating: data.rating,
+          comment: data.review,
+        },
+      });
+
+      // 5. Recalculate hostel rating
+      const agg = await tx.review.aggregate({
+        where: { hostelId: activeBooking.hostelId },
+        _avg: { rating: true },
+        _count: { id: true },
+      });
+
+      await tx.hostel.update({
+        where: { id: activeBooking.hostelId },
+        data: {
+          averageRating: agg._avg.rating ?? 0,
+          reviewCount: agg._count.id,
+        },
+      });
+
+      return updatedBooking;
     });
 
-    // 2) Outside transaction: update room availability
-    await hostelsService.updateRoomAvailability(
-      studentProfile.currentHostelId!, // old value still in memory
-      activeBooking.roomType,
-      1
-    );
-
-    // 3) Outside transaction: create review
-    await prisma.review.create({
-      data: {
-        bookingId: activeBooking.id,
-        hostelId: activeBooking.hostelId,
-        rating: data.rating,
-        comment: data.review,
-      },
-    });
-
-    // 4) Outside transaction: recalculate hostel rating & review count
-    const agg = await prisma.review.aggregate({
-      where: { hostelId: activeBooking.hostelId },
-      _avg: { rating: true },
-      _count: { id: true },
-    });
-
-    await prisma.hostel.update({
-      where: { id: activeBooking.hostelId },
-      data: {
-        averageRating: agg._avg.rating ?? 0,
-        reviewCount: agg._count.id,
-      },
-    });
-
-    return updatedBooking;
+    return result;
   }
 
   async kickStudent(userId: string, bookingId: string, data: KickStudentInput) {
@@ -383,7 +457,7 @@ export class BookingsService {
     });
 
     if (!managerProfile) {
-      throw new Error('Manager profile not found');
+      throw new Error("Manager profile not found");
     }
 
     const booking = await prisma.booking.findUnique({
@@ -392,29 +466,51 @@ export class BookingsService {
     });
 
     if (!booking) {
-      throw new Error('Booking not found');
+      throw new Error("Booking not found");
     }
 
     if (booking.hostel.managerId !== managerProfile.id) {
-      throw new Error('Not authorized');
+      throw new Error("Not authorized");
     }
 
-    if (booking.status !== 'APPROVED') {
-      throw new Error('Booking is not active');
+    if (booking.status !== "APPROVED") {
+      throw new Error("Booking is not active");
     }
 
     const result = await prisma.$transaction(async (tx) => {
       const updatedBooking = await tx.booking.update({
         where: { id: bookingId },
         data: {
-          status: 'LEFT',
+          status: "LEFT",
           kickReason: data.kickReason,
           kickByManagerId: managerProfile.id,
+          leaveDate: new Date(),
         },
       });
 
       // Update room availability for the specific room type
-      await hostelsService.updateRoomAvailability(booking.hostelId, booking.roomType, 1);
+      // Now applies to BOTH REGULAR and URGENT bookings
+      const hostel = await tx.hostel.findUnique({
+        where: { id: booking.hostelId },
+      });
+
+      if (hostel) {
+        const roomTypes = hostel.roomTypes as RoomTypeConfigDB[];
+        const updatedRoomTypes = roomTypes.map((rt) => {
+          if (rt.type === booking.roomType) {
+            return {
+              ...rt,
+              availableRooms: Math.min(rt.totalRooms, rt.availableRooms + 1),
+            };
+          }
+          return rt;
+        });
+
+        await tx.hostel.update({
+          where: { id: booking.hostelId },
+          data: { roomTypes: updatedRoomTypes },
+        });
+      }
 
       await tx.studentProfile.update({
         where: { id: booking.studentId },
@@ -425,7 +521,7 @@ export class BookingsService {
         data: {
           action: `STUDENT_KICKED_${data.kickReason}`,
           performedBy: userId,
-          targetType: 'Booking',
+          targetType: "Booking",
           targetId: bookingId,
           details: `Student kicked from hostel. Room type: ${booking.roomType}. Reason: ${data.kickReason}`,
         },
@@ -463,7 +559,7 @@ export class BookingsService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
   }
 
@@ -493,7 +589,7 @@ export class BookingsService {
     });
 
     if (!booking) {
-      throw new Error('Booking not found');
+      throw new Error("Booking not found");
     }
 
     return booking;
