@@ -43,6 +43,13 @@ router.post(
 
 // Manager routes
 router.get(
+  '/manager',
+  authenticate,
+  authorize('MANAGER'),
+  (req, res) => bookingsController.getManagerBookings(req, res)
+);
+
+router.get(
   '/hostel/:hostelId',
   authenticate,
   authorize('MANAGER'),

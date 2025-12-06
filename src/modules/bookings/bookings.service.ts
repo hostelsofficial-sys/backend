@@ -1,4 +1,5 @@
 // src/modules/bookings/bookings.service.ts
+import { ReservationStatus } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { HostelsService } from '../hostels/hostels.service';
 import {
@@ -60,21 +61,84 @@ export class BookingsService {
     // Get the price based on room type
     const amount = selectedRoomType.price;
 
-    const booking = await prisma.booking.create({
-      data: {
-        studentId: studentProfile.id,
-        hostelId: data.hostelId,
-        roomType: data.roomType,
-        amount,
-        transactionImage: data.transactionImage,
-        transactionDate: data.transactionDate,
-        transactionTime: data.transactionTime,
-        fromAccount: data.fromAccount,
-        toAccount: data.toAccount,
-      },
+    const booking = await prisma.$transaction(async (tx) => {
+      const newBooking = await tx.booking.create({
+        data: {
+          studentId: studentProfile.id,
+          hostelId: data.hostelId,
+          roomType: data.roomType,
+          amount,
+          transactionImage: data.transactionImage,
+          transactionDate: data.transactionDate,
+          transactionTime: data.transactionTime,
+          fromAccount: data.fromAccount,
+          toAccount: data.toAccount,
+        },
+      });
+
+      if (data.reservationId) {
+        const reservation = await tx.reservation.findUnique({
+          where: { id: data.reservationId },
+        });
+
+        if (!reservation) {
+          throw new Error('Reservation not found');
+        }
+
+        if (reservation.studentId !== studentProfile.id) {
+          throw new Error('Reservation does not belong to this student');
+        }
+
+        if (reservation.status !== 'ACCEPTED') {
+          throw new Error('Reservation is not accepted');
+        }
+
+        await tx.reservation.update({
+          where: { id: data.reservationId },
+          data: { status: ReservationStatus.CANCELLED },
+        });
+      }
+
+      return newBooking;
     });
 
     return booking;
+  }
+
+  async getManagerBookings(userId: string) {
+    const managerProfile = await prisma.managerProfile.findUnique({
+      where: { userId },
+    });
+
+    if (!managerProfile) {
+      throw new Error('Manager profile not found');
+    }
+
+    const hostels = await prisma.hostel.findMany({
+      where: { managerId: managerProfile.id },
+      select: { id: true },
+    });
+
+    const hostelIds = hostels.map((h) => h.id);
+
+    return prisma.booking.findMany({
+      where: { hostelId: { in: hostelIds } },
+      include: {
+        student: {
+          include: {
+            user: {
+              select: { email: true },
+            },
+          },
+        },
+        hostel: {
+          select: {
+            hostelName: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async getMyBookings(userId: string) {

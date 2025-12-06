@@ -4,6 +4,7 @@ import { z } from 'zod';
 export const createBookingSchema = z.object({
   hostelId: z.string(),
   roomType: z.enum(['SHARED', 'PRIVATE', 'SHARED_FULLROOM']),
+  reservationId: z.string().optional(),
   transactionImage: z.string().url(),
   transactionDate: z.string(),
   transactionTime: z.string(),
