@@ -56,4 +56,12 @@ router.post(
   (req, res) => usersController.terminateUser(req, res)
 );
 
+//Delete Account for Manager & Student (Self-Delete) :
+router.delete(
+  '/delete',
+  authenticate,
+  notTerminated,
+  (req, res) => usersController.deleteMyAccount(req, res)
+);
+
 export default router;
